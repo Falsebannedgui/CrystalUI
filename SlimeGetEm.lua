@@ -232,15 +232,55 @@ function Lib:Window(opts)
     rnd(closeBtn,7)
     local closeL=lbl(closeBtn,"×",18,C.white,Enum.Font.GothamBold,Enum.TextXAlignment.Center); closeL.Size=UDim2.new(1,0,1,0)
 
-    closeBtn.MouseButton1Click:Connect(function()
-        tw(main,{Size=UDim2.new(0,WW*0.9,0,WH*0.9),BackgroundTransparency=1},0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.In)
-        task.wait(0.22); sg:Destroy()
+    -- Toggle visibility (RightShift by default, or opts.ToggleKey)
+    local guiOpen   = true
+    local guiLoaded = false
+    local toggleKey = opts.ToggleKey or Enum.KeyCode.RightShift
+
+    local function openGUI()
+        if not guiLoaded then return end
+        guiOpen = true
+        main.Visible = true
+        main.BackgroundTransparency = 1
+        main.Size     = UDim2.new(0, WW*0.88, 0, WH*0.88)
+        main.Position = UDim2.new(0.5, -WW*0.88/2, 0.5, -WH*0.88/2)
+        tw(main, {
+            BackgroundTransparency = 0,
+            Size     = UDim2.new(0, WW, 0, WH),
+            Position = UDim2.new(0.5, -WW/2, 0.5, -WH/2),
+        }, 0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    end
+
+    local function closeGUI()
+        if not guiLoaded then return end
+        guiOpen = false
+        tw(main, {
+            BackgroundTransparency = 1,
+            Size     = UDim2.new(0, WW*0.88, 0, WH*0.88),
+            Position = UDim2.new(0.5, -WW*0.88/2, 0.5, -WH*0.88/2),
+        }, 0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        task.delay(0.25, function() if not guiOpen then main.Visible = false end end)
+    end
+
+    local function toggleGUI()
+        if guiOpen then closeGUI() else openGUI() end
+    end
+
+    UIS.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.KeyCode == toggleKey then toggleGUI() end
     end)
 
-    local minimized=false
+    closeBtn.MouseButton1Click:Connect(function()
+        tw(main,{Size=UDim2.new(0,WW*0.88,0,WH*0.88),BackgroundTransparency=1},0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.In)
+        task.wait(0.25); sg:Destroy()
+    end)
+
+    local minimized = false
     minBtn.MouseButton1Click:Connect(function()
-        minimized=not minimized
-        tw(main,{Size=minimized and UDim2.new(0,WW,0,54) or UDim2.new(0,WW,0,WH)},0.26,Enum.EasingStyle.Quart)
+        minimized = not minimized
+        tw(main, {Size = minimized and UDim2.new(0,WW,0,54) or UDim2.new(0,WW,0,WH)},
+            0.28, Enum.EasingStyle.Quart)
     end)
 
     -- Header divider
@@ -302,7 +342,8 @@ function Lib:Window(opts)
             Position=UDim2.new(0.5,-WW/2,0.5,-WH/2)
         },0.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
         task.wait(0.35); ls:Destroy()
-        notify("SlimeGetEm","Loaded successfully!",2.5)
+        guiLoaded = true
+        notify("SlimeGetEm","Loaded! Press "..tostring(toggleKey.Name).." to toggle",3)
     end)
 
     -- ═══════════════════════════════════════════════════════════════
@@ -449,108 +490,153 @@ function Lib:Window(opts)
         end
 
         -- ══════════════════════════════════════════════════════════
-        --  MULTIBOX  — dropdown list, each row has a checkbox tick
-        --  Selected items show a checkmark on the right
+        --  MULTIBOX  — expandable list, each row toggles independently
+        --  Checkmark appears on the right of each selected row
         -- ══════════════════════════════════════════════════════════
         function Tab:Multibox(o)
-            o=o or {}
-            local opts2=o.Options or {}
-            local ITEM_H=34
-            local CLOSED_H=CH(o)
-            local OPEN_H=CLOSED_H + #opts2*ITEM_H + 8
+            o = o or {}
+            local opts2  = o.Options or {}
+            local ITEM_H = 36
+            local HDR_H  = CH(o)          -- header row height
+            local OPEN_H = HDR_H + 6 + #opts2 * ITEM_H + 8
 
-            local f=card(CLOSED_H); f.ClipsDescendants=true
-            addLD(f,o.Label or "Multibox",o.Desc)
+            -- Outer card — clips children, expands downward
+            local f = card(HDR_H)
+            f.ClipsDescendants = true
 
-            -- Count badge
-            local badge=frm(f,UDim2.new(0,24,0,20),UDim2.new(1,-88,0.5,-10),C.elem); rnd(badge,6); str(badge,C.border,1,0.3)
-            local badgeTxt=lbl(badge,"0",11,C.txtG,Enum.Font.GothamBold,Enum.TextXAlignment.Center); badgeTxt.Size=UDim2.new(1,0,1,0)
+            -- ── Header row (label + desc + badge + arrow) ────────────
+            -- Label & desc already added via addLD, but we need them
+            -- INSIDE a fixed-height header so they never scroll
+            local hdrRow = frm(f, UDim2.new(1,0,0,HDR_H), UDim2.new(0,0,0,0), C.black, 1)
+            addLD(hdrRow, o.Label or "Multibox", o.Desc)
 
-            -- Expand / collapse arrow button
-            local expandBtn=frm(f,UDim2.new(0,58,0,28),UDim2.new(1,-70,0.5,-14),C.elem); rnd(expandBtn,8); str(expandBtn,C.border,1,0.4)
-            local arrowTxt=lbl(expandBtn,"▾",13,C.txtG,Enum.Font.GothamBold,Enum.TextXAlignment.Center); arrowTxt.Size=UDim2.new(1,0,1,0)
-            local expandHit=tbtn(f,UDim2.new(0,58,0,28),UDim2.new(1,-70,0.5,-14),C.black,1)
+            -- Count badge (top-right of header)
+            local badge    = frm(hdrRow, UDim2.new(0,26,0,22), UDim2.new(1,-96,0.5,-11), C.elem)
+            rnd(badge,7); str(badge,C.border,1,0.3)
+            local badgeTxt = lbl(badge,"0",11,C.txtG,Enum.Font.GothamBold,Enum.TextXAlignment.Center)
+            badgeTxt.Size  = UDim2.new(1,0,1,0)
 
-            -- Dropdown list (rendered below the header row)
-            local listFrame=frm(f,UDim2.new(1,0,0,0),UDim2.new(0,0,0,CLOSED_H),C.black,1)
-            -- separator line above list
-            local sep=frm(listFrame,UDim2.new(1,-24,0,1),UDim2.new(0,12,0,0),C.border); sep.BackgroundTransparency=0.4
+            -- Arrow expand button (top-right of header)
+            local arrowBtn = frm(hdrRow, UDim2.new(0,32,0,28), UDim2.new(1,-38,0.5,-14), C.elem)
+            rnd(arrowBtn,8); str(arrowBtn,C.border,1,0.4)
+            local arrowL   = lbl(arrowBtn,"▾",13,C.txtG,Enum.Font.GothamBold,Enum.TextXAlignment.Center)
+            arrowL.Size    = UDim2.new(1,0,1,0)
+            local arrowHit = tbtn(hdrRow, UDim2.new(0,32,0,28), UDim2.new(1,-38,0.5,-14), C.black, 1)
 
-            local selected={}
-            local count=0
-            local chips={}  -- option row refs
+            -- ── Separator line ───────────────────────────────────────
+            local sep = frm(f, UDim2.new(1,-24,0,1), UDim2.new(0,12,0,HDR_H), C.border)
+            sep.BackgroundTransparency = 0.55
 
-            for i,optName in ipairs(opts2) do
-                local row=frm(listFrame,UDim2.new(1,0,0,ITEM_H),UDim2.new(0,0,0,4+(i-1)*ITEM_H),C.black,1)
-                -- hover bg
-                local rowBg=frm(row,UDim2.new(1,-24,1,-4),UDim2.new(0,12,0,2),C.elem); rnd(rowBg,7); rowBg.BackgroundTransparency=1
+            -- ── Option rows ──────────────────────────────────────────
+            -- Use a frame below the header; UIListLayout stacks rows cleanly
+            local listOuter = frm(f, UDim2.new(1,0,0,#opts2*ITEM_H+6), UDim2.new(0,0,0,HDR_H+2), C.black, 1)
+            local rowLayout = Instance.new("UIListLayout")
+            rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            rowLayout.Padding   = UDim.new(0,0)
+            rowLayout.Parent    = listOuter
+            pad(listOuter,4,4,0,0)
 
-                local rowTxt=lbl(row,optName,12,C.txtG,Enum.Font.GothamMedium)
-                rowTxt.Size=UDim2.new(1,-48,1,0); rowTxt.Position=UDim2.new(0,20,0,0)
+            local selected = {}
+            local count    = 0
+            local chips    = {}
 
-                -- Checkmark box on right
-                local chkBox=frm(row,UDim2.new(0,20,0,20),UDim2.new(1,-36,0.5,-10),C.elem); rnd(chkBox,6); str(chkBox,C.border,1,0.3)
-                local chkTick=lbl(chkBox,"✓",12,C.win,Enum.Font.GothamBold,Enum.TextXAlignment.Center)
-                chkTick.Size=UDim2.new(1,0,1,0); chkTick.TextTransparency=1
+            for i, optName in ipairs(opts2) do
+                -- Row container
+                local row   = frm(listOuter, UDim2.new(1,0,0,ITEM_H), nil, C.black, 1)
+                row.LayoutOrder = i
 
-                local rowHit=tbtn(row,UDim2.new(1,0,1,0),nil,C.black,1)
+                -- Hover bg (inset 12px each side)
+                local rowBg = frm(row, UDim2.new(1,-24,1,-6), UDim2.new(0,12,0,3), C.elem)
+                rowBg.BackgroundTransparency = 1
+                rnd(rowBg, 8)
 
-                chips[optName]={active=false,rowTxt=rowTxt,chkBox=chkBox,chkTick=chkTick,rowBg=rowBg}
+                -- Option name label
+                local rowTxt = lbl(row, optName, 12, C.txtG, Enum.Font.GothamMedium)
+                rowTxt.Size     = UDim2.new(1,-64,1,0)
+                rowTxt.Position = UDim2.new(0,24,0,0)
+
+                -- Checkbox on the right (inside the hover bg bounds)
+                local chkBox  = frm(row, UDim2.new(0,22,0,22), UDim2.new(1,-38,0.5,-11), C.elem)
+                rnd(chkBox,7); str(chkBox,C.border,1,0.3)
+                local chkTick = lbl(chkBox,"✓",13,C.win,Enum.Font.GothamBold,Enum.TextXAlignment.Center)
+                chkTick.Size            = UDim2.new(1,0,1,0)
+                chkTick.TextTransparency = 1
+
+                -- Full-row hitbox
+                local rowHit = tbtn(row, UDim2.new(1,0,1,0), nil, C.black, 1)
+
+                chips[optName] = {active=false, rowTxt=rowTxt, chkBox=chkBox, chkTick=chkTick, rowBg=rowBg}
 
                 rowHit.MouseButton1Click:Connect(function()
-                    local c=chips[optName]
-                    c.active=not c.active
+                    local c = chips[optName]
+                    c.active = not c.active
                     if c.active then
-                        selected[optName]=true; count=count+1
-                        tw(rowBg,{BackgroundTransparency=0.7},0.12)
-                        tw(c.rowTxt,{TextColor3=C.txtW},0.12)
-                        tw(c.chkBox,{BackgroundColor3=C.accBrt},0.15)
-                        tw(c.chkTick,{TextTransparency=0},0.1)
+                        selected[optName] = true;  count = count + 1
+                        tw(rowBg,   {BackgroundTransparency=0.65},        0.14)
+                        tw(rowTxt,  {TextColor3=C.txtW},                  0.14)
+                        tw(chkBox,  {BackgroundColor3=C.accBrt},          0.14)
+                        tw(chkTick, {TextTransparency=0, TextColor3=C.win}, 0.1)
                     else
-                        selected[optName]=nil; count=count-1
-                        tw(rowBg,{BackgroundTransparency=1},0.12)
-                        tw(c.rowTxt,{TextColor3=C.txtG},0.12)
-                        tw(c.chkBox,{BackgroundColor3=C.elem},0.15)
-                        tw(c.chkTick,{TextTransparency=1},0.1)
+                        selected[optName] = nil;   count = count - 1
+                        tw(rowBg,   {BackgroundTransparency=1},           0.14)
+                        tw(rowTxt,  {TextColor3=C.txtG},                  0.14)
+                        tw(chkBox,  {BackgroundColor3=C.elem},            0.14)
+                        tw(chkTick, {TextTransparency=1},                 0.1)
                     end
-                    badgeTxt.Text=tostring(count)
-                    tw(badge,{BackgroundColor3=count>0 and C.accDim or C.elem},0.12)
-                    tw(badgeTxt,{TextColor3=count>0 and C.accBrt or C.txtG},0.12)
+                    badgeTxt.Text = tostring(count)
+                    tw(badge,    {BackgroundColor3=count>0 and C.accDim or C.elem}, 0.14)
+                    tw(badgeTxt, {TextColor3=count>0 and C.accBrt or C.txtG},      0.14)
                     if o.Callback then o.Callback(selected) end
                 end)
-                rowHit.MouseEnter:Connect(function() if not chips[optName].active then tw(rowBg,{BackgroundTransparency=0.88},0.1) end end)
-                rowHit.MouseLeave:Connect(function() if not chips[optName].active then tw(rowBg,{BackgroundTransparency=1},0.1) end end)
+                rowHit.MouseEnter:Connect(function()
+                    if not chips[optName].active then tw(rowBg,{BackgroundTransparency=0.85},0.1) end
+                end)
+                rowHit.MouseLeave:Connect(function()
+                    if not chips[optName].active then tw(rowBg,{BackgroundTransparency=1},0.1) end
+                end)
             end
 
-            local expanded=false
-            expandHit.MouseButton1Click:Connect(function()
-                expanded=not expanded
-                tw(f,{Size=UDim2.new(1,0,0,expanded and OPEN_H or CLOSED_H)},0.25,Enum.EasingStyle.Quart)
-                arrowTxt.Text=expanded and "▴" or "▾"
-                tw(arrowTxt,{TextColor3=expanded and C.txtW or C.txtG},0.15)
-                tw(expandBtn,{BackgroundColor3=expanded and C.elemHov or C.elem},0.15)
+            -- ── Expand / collapse ────────────────────────────────────
+            local expanded = false
+            arrowHit.MouseButton1Click:Connect(function()
+                expanded = not expanded
+                tw(f, {Size=UDim2.new(1,0,0, expanded and OPEN_H or HDR_H)},
+                    0.26, Enum.EasingStyle.Quart)
+                arrowL.Text = expanded and "▴" or "▾"
+                tw(arrowL,   {TextColor3=expanded and C.txtW or C.txtG},         0.15)
+                tw(arrowBtn, {BackgroundColor3=expanded and C.elemHov or C.elem}, 0.15)
             end)
-            expandHit.MouseEnter:Connect(function() tw(expandBtn,{BackgroundColor3=expanded and C.elemHov or C.elemHov},0.1) end)
-            expandHit.MouseLeave:Connect(function() tw(expandBtn,{BackgroundColor3=expanded and C.elemHov or C.elem},0.1) end)
+            arrowHit.MouseEnter:Connect(function()
+                tw(arrowBtn,{BackgroundColor3=C.elemHov},0.1)
+            end)
+            arrowHit.MouseLeave:Connect(function()
+                tw(arrowBtn,{BackgroundColor3=expanded and C.elemHov or C.elem},0.1)
+            end)
 
             return {
-                GetSelected=function() return selected end,
-                SetSelected=function(tbl)
-                    for _,c in pairs(chips) do
-                        c.active=false
-                        c.chkBox.BackgroundColor3=C.elem; c.chkTick.TextTransparency=1
-                        c.rowBg.BackgroundTransparency=1; c.rowTxt.TextColor3=C.txtG
+                GetSelected = function() return selected end,
+                SetSelected = function(tbl)
+                    for _, c in pairs(chips) do
+                        c.active = false
+                        c.chkBox.BackgroundColor3   = C.elem
+                        c.chkTick.TextTransparency  = 1
+                        c.rowBg.BackgroundTransparency = 1
+                        c.rowTxt.TextColor3         = C.txtG
                     end
-                    selected={}; count=0
-                    for _,n in ipairs(tbl) do
+                    selected = {}; count = 0
+                    for _, n in ipairs(tbl) do
                         if chips[n] then
-                            chips[n].active=true; selected[n]=true; count=count+1
-                            chips[n].chkBox.BackgroundColor3=C.accBrt; chips[n].chkTick.TextTransparency=0
-                            chips[n].rowBg.BackgroundTransparency=0.7; chips[n].rowTxt.TextColor3=C.txtW
+                            chips[n].active                    = true
+                            selected[n]                        = true
+                            count                              = count + 1
+                            chips[n].chkBox.BackgroundColor3   = C.accBrt
+                            chips[n].chkTick.TextTransparency  = 0
+                            chips[n].rowBg.BackgroundTransparency = 0.65
+                            chips[n].rowTxt.TextColor3         = C.txtW
                         end
                     end
-                    badgeTxt.Text=tostring(count)
-                end
+                    badgeTxt.Text = tostring(count)
+                end,
             }
         end
 
