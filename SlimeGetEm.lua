@@ -602,89 +602,99 @@ function Lib:Window(opts)
         end
 
         -- ══════════════════════════════════════════════════════════
-        --  DROPDOWN  (single select)
+        --  DROPDOWN  (single select, stored refs, clean logic)
         -- ══════════════════════════════════════════════════════════
         function Tab:Dropdown(o)
-            o=o or {}
-            local opts3=o.Options or {}
-            local ITEM_H2=32
-            local CLOSED_H2=CH(o)
-            local OPEN_H2=CLOSED_H2+#opts3*ITEM_H2+8
+            o = o or {}
+            local opts3   = o.Options or {}
+            local ITEM_H2 = 32
+            local CLOSED_H2 = CH(o)
+            local OPEN_H2   = CLOSED_H2 + #opts3 * ITEM_H2 + 10
 
-            local f=card(CLOSED_H2); f.ClipsDescendants=true
-            addLD(f,o.Label or "Dropdown",o.Desc)
-            local sel=o.Default or (opts3[1] or "Select…")
+            local f = card(CLOSED_H2)
+            f.ClipsDescendants = true
+            addLD(f, o.Label or "Dropdown", o.Desc)
 
-            -- Select row
-            local selRow=frm(f,UDim2.new(1,-24,0,28),UDim2.new(0,12,0,CLOSED_H2-36),C.elem); rnd(selRow,8); str(selRow,C.border,1,0.4)
-            local selTxt=lbl(selRow,sel,12,C.txtW,Enum.Font.GothamMedium)
-            selTxt.Size=UDim2.new(1,-28,1,0); selTxt.Position=UDim2.new(0,10,0,0)
-            local arrL=lbl(selRow,"▾",11,C.txtD,Enum.Font.GothamBold,Enum.TextXAlignment.Right)
-            arrL.Size=UDim2.new(0,22,1,0); arrL.Position=UDim2.new(1,-24,0,0)
+            local sel = o.Default or (opts3[1] or "Select...")
 
-            -- Option list
-            local oList=frm(f,UDim2.new(1,-24,0,0),UDim2.new(0,12,0,CLOSED_H2-4),C.elem); rnd(oList,8); str(oList,C.border,1,0.4); oList.ClipsDescendants=true
-            local oLayout=Instance.new("UIListLayout"); oLayout.SortOrder=Enum.SortOrder.LayoutOrder; oLayout.Parent=oList
+            -- Header select row
+            local selRow = frm(f, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,CLOSED_H2-36), C.elem)
+            rnd(selRow,8); str(selRow,C.border,1,0.4)
+            local selTxt = lbl(selRow, sel, 12, C.txtW, Enum.Font.GothamMedium)
+            selTxt.Size = UDim2.new(1,-28,1,0); selTxt.Position = UDim2.new(0,10,0,0)
+            local arrL = lbl(selRow, "▾", 11, C.txtD, Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+            arrL.Size = UDim2.new(0,22,1,0); arrL.Position = UDim2.new(1,-24,0,0)
 
-            for i,optN in ipairs(opts3) do
-                local ob=tbtn(oList,UDim2.new(1,0,0,ITEM_H2),nil,C.black,1); ob.LayoutOrder=i; rnd(ob,0)
-                local obBg=frm(ob,UDim2.new(1,0,1,0),nil,C.elemHov); obBg.BackgroundTransparency=1
-                local ol2=lbl(ob,optN,12,optN==sel and C.txtW or C.txtG,Enum.Font.GothamMedium)
-                ol2.Size=UDim2.new(1,-16,1,0); ol2.Position=UDim2.new(0,10,0,0)
-                -- checkmark for selected
-                local ck=lbl(ob,optN==sel and "✓" or "",11,C.accBrt,Enum.Font.GothamBold,Enum.TextXAlignment.Right)
-                ck.Size=UDim2.new(0,22,1,0); ck.Position=UDim2.new(1,-24,0,0)
+            -- Options list container
+            local oList = frm(f, UDim2.new(1,-24,0,0), UDim2.new(0,12,0,CLOSED_H2-4), C.elem)
+            rnd(oList,8); str(oList,C.border,1,0.4); oList.ClipsDescendants = true
+            local oLayout = Instance.new("UIListLayout")
+            oLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            oLayout.Parent = oList
 
-                ob.MouseEnter:Connect(function() tw(obBg,{BackgroundTransparency=0.7},0.1) end)
-                ob.MouseLeave:Connect(function() tw(obBg,{BackgroundTransparency=1},0.1) end)
+            -- Store row refs: optName -> {rowTxt, ckTxt, rowBg}
+            local rows = {}
+            for i, optN in ipairs(opts3) do
+                local ob = tbtn(oList, UDim2.new(1,0,0,ITEM_H2), nil, C.black, 1)
+                ob.LayoutOrder = i
+                local obBg = frm(ob, UDim2.new(1,0,1,0), nil, C.elemHov)
+                obBg.BackgroundTransparency = 1
+                local oTxt = lbl(ob, optN, 12, optN==sel and C.txtW or C.txtG, Enum.Font.GothamMedium)
+                oTxt.Size = UDim2.new(1,-36,1,0); oTxt.Position = UDim2.new(0,10,0,0)
+                local ckL = lbl(ob, optN==sel and "✓" or "", 12, C.accBrt, Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+                ckL.Size = UDim2.new(0,24,1,0); ckL.Position = UDim2.new(1,-26,0,0)
+                rows[optN] = {txt=oTxt, ck=ckL, bg=obBg}
+
+                ob.MouseEnter:Connect(function()
+                    if sel ~= optN then tw(obBg,{BackgroundTransparency=0.75},0.1) end
+                end)
+                ob.MouseLeave:Connect(function()
+                    if sel ~= optN then tw(obBg,{BackgroundTransparency=1},0.1) end
+                end)
                 ob.MouseButton1Click:Connect(function()
-                    sel=optN; selTxt.Text=optN
-                    -- update all checkmarks & colors
-                    for _,c2 in oList:GetChildren() do
-                        if c2:IsA("TextButton") then
-                            local lt=c2:FindFirstChildOfClass("TextLabel")
-                            local ck2=c2:FindFirstChild("CK")  -- won't exist; use loop approach
-                        end
+                    local prev = sel
+                    sel = optN
+                    selTxt.Text = optN
+                    -- deactivate previous row
+                    if rows[prev] then
+                        tw(rows[prev].txt, {TextColor3=C.txtG}, 0.12)
+                        rows[prev].ck.Text = ""
+                        tw(rows[prev].bg, {BackgroundTransparency=1}, 0.12)
                     end
-                    -- simpler: update via stored refs would need table; just update directly
-                    for _,child in oList:GetChildren() do
-                        if child:IsA("TextButton") then
-                            local childTxt=child:FindFirstChildOfClass("TextLabel")
-                            if childTxt then
-                                childTxt.TextColor3=(childTxt.Text==optN) and C.txtW or C.txtG
-                            end
-                        end
-                    end
-                    ck.Text="✓"
-                    -- reset others' checkmarks
-                    for _,child in oList:GetChildren() do
-                        if child:IsA("TextButton") then
-                            local cks=child:GetChildren()
-                            for _,cc in ipairs(cks) do
-                                if cc:IsA("TextLabel") and cc.Text=="✓" and cc~=ck then cc.Text="" end
-                            end
-                        end
-                    end
-                    -- close
-                    local expanded2=false
-                    tw(f,{Size=UDim2.new(1,0,0,CLOSED_H2)},0.22,Enum.EasingStyle.Quart)
-                    tw(oList,{Size=UDim2.new(1,-24,0,0)},0.22,Enum.EasingStyle.Quart)
-                    arrL.Text="▾"; tw(arrL,{TextColor3=C.txtD},0.12)
+                    -- activate new row
+                    tw(oTxt, {TextColor3=C.txtW}, 0.12)
+                    ckL.Text = "✓"
+                    tw(obBg, {BackgroundTransparency=0.6}, 0.12)
+                    -- close dropdown
+                    tw(f, {Size=UDim2.new(1,0,0,CLOSED_H2)}, 0.22, Enum.EasingStyle.Quart)
+                    tw(oList, {Size=UDim2.new(1,-24,0,0)}, 0.22, Enum.EasingStyle.Quart)
+                    arrL.Text = "▾"
+                    tw(arrL, {TextColor3=C.txtD}, 0.12)
                     if o.Callback then o.Callback(optN) end
-                    notify(o.Label or "Dropdown",optN.." selected")
+                    notify(o.Label or "Dropdown", optN.." selected")
                 end)
             end
 
-            local expDD=false
-            local selHit=tbtn(f,UDim2.new(1,-24,0,28),UDim2.new(0,12,0,CLOSED_H2-36),C.black,1)
+            -- Toggle expand on header hit
+            local expDD = false
+            local selHit = tbtn(f, UDim2.new(1,-24,0,28), UDim2.new(0,12,0,CLOSED_H2-36), C.black, 1)
             selHit.MouseButton1Click:Connect(function()
-                expDD=not expDD
-                tw(f,{Size=UDim2.new(1,0,0,expDD and OPEN_H2 or CLOSED_H2)},0.24,Enum.EasingStyle.Quart)
-                tw(oList,{Size=UDim2.new(1,-24,0,expDD and #opts3*ITEM_H2 or 0)},0.24,Enum.EasingStyle.Quart)
-                arrL.Text=expDD and "▴" or "▾"
-                tw(arrL,{TextColor3=expDD and C.txtW or C.txtD},0.12)
+                expDD = not expDD
+                tw(f, {Size=UDim2.new(1,0,0, expDD and OPEN_H2 or CLOSED_H2)}, 0.24, Enum.EasingStyle.Quart)
+                tw(oList, {Size=UDim2.new(1,-24,0, expDD and #opts3*ITEM_H2 or 0)}, 0.24, Enum.EasingStyle.Quart)
+                arrL.Text = expDD and "▴" or "▾"
+                tw(arrL, {TextColor3 = expDD and C.txtW or C.txtD}, 0.12)
             end)
-            return {Get=function() return sel end,Set=function(v) sel=v; selTxt.Text=v end}
+
+            return {
+                Get = function() return sel end,
+                Set = function(v)
+                    if rows[sel] then rows[sel].ck.Text=""; rows[sel].txt.TextColor3=C.txtG end
+                    sel=v; selTxt.Text=v
+                    if rows[v] then rows[v].ck.Text="✓"; rows[v].txt.TextColor3=C.txtW end
+                    if o.Callback then o.Callback(v) end
+                end
+            }
         end
 
         -- ══════════════════════════════════════════════════════════
